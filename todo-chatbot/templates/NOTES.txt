@@ -1,0 +1,27 @@
+1. Todo-Chatbot has been deployed successfully!
+
+Backend Deployment:
+  - Service: {{ include "todo-chatbot.fullname" . }}-backend
+  - Port: {{ .Values.backend.service.port }}
+  - Type: {{ .Values.backend.service.type }}
+  - Access from within cluster: {{ include "todo-chatbot.fullname" . }}-backend:{{ .Values.backend.service.port }}
+
+Frontend Deployment:
+  - Service: {{ include "todo-chatbot.fullname" . }}-frontend
+  - Port: {{ .Values.frontend.service.port }}
+  - Type: {{ .Values.frontend.service.type }}
+
+2. Access the frontend locally using port-forwarding:
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "todo-chatbot.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app=frontend" -o jsonpath="{.items[0].metadata.name}")
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME {{ .Values.frontend.service.port }}:{{ .Values.frontend.service.targetPort }}
+
+  Then visit: http://localhost:{{ .Values.frontend.service.port }}
+
+3. The frontend will communicate with the backend service at:
+  http://{{ include "todo-chatbot.fullname" . }}-backend:{{ .Values.backend.service.port }}
+
+{{- if .Values.ingress.enabled }}
+
+4. Ingress is enabled. View your ingress configuration:
+  kubectl get ingress --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "todo-chatbot.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+{{- end }}
