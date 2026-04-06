@@ -2,47 +2,56 @@
   ============================================================================
   SYNC IMPACT REPORT
   ============================================================================
-  Version Change: 1.2.0 → 2.0.0 (MAJOR - Added Phase-3 AI Chatbot extension with
-  Phase-2 lockdown and MCP tool governance)
+  Version Change: 2.0.0 → 3.0.0 (MAJOR - Added Phases 5-7 with event-driven
+  architecture, Dapr integration, cloud deployment, and advanced features)
 
   Modified Principles:
-  - Principle VI (Spec-Driven Development Mandate) - expanded for Phase-3 workflow
+  - Principle VI (Spec-Driven Development Mandate) - expanded for Phases 5-7
+  - Principle XVII (Stateless Chat Architecture) - extended for event sourcing
 
   Added Sections (Core Principles):
-  - XVI. Phase-2 Read-Only Mandate (Spec-2 lockdown)
-  - XVII. Stateless Chat Architecture (Spec-4)
-  - XVIII. JWT Security for Chat (Spec-4)
-  - XIX. Conversation Ownership (Spec-4)
-  - XX. MCP Tool Governance (Spec-4)
-  - XXI. Chat-Task Integration via MCP (Spec-4)
-  - XXII. Chat Frontend Isolation (Spec-4)
-  - XXIII. Conversation Data Persistence (Spec-4)
-  - XXIV. Chat API Error Handling (Spec-4)
-  - XXV. OpenAI Integration & Configuration (Spec-4)
+  - XXVI. Event-Driven Architecture (Phase 6 - 007-local-event-architecture)
+  - XXVII. Kafka Event Bus Integration (Phase 6)
+  - XXVIII. Dapr Pub/Sub Abstraction (Phase 6)
+  - XXIX. Event Sourcing Pattern (Phase 6)
+  - XXX. Message Schema & Versioning (Phase 6)
+  - XXXI. Local Kubernetes Event Mesh (Phase 6)
+  - XXXII. Cloud Deployment Portability (Phase 7 - 008-cloud-deployment)
+  - XXXIII. Helm Chart Reusability (Phase 7)
+  - XXXIV. Cloud Provider Abstraction (Phase 7)
+  - XXXV. Advanced Chat Features (Phase 5 - 006-advanced-features)
+  - XXXVI. Conversation Intelligence (Phase 5)
+  - XXXVII. Chat Analytics & Observability (Phase 5)
 
   Added Sections (Development Workflow):
-  - Spec-4: AI Chatbot Scope
-  - Spec-4 Success Criteria
-  - Explicitly Forbidden (Spec-4) additions
+  - Spec-5: Advanced Features Scope (006-advanced-features)
+  - Spec-6: Event Architecture Scope (007-local-event-architecture)
+  - Spec-7: Cloud Deployment Scope (008-cloud-deployment)
+  - Spec-5/6/7 Success Criteria
+  - Explicitly Forbidden (Specs 5-7) additions
 
   Removed Sections: None
 
   Technology Stack Additions:
-  - OpenAI Agents SDK (Python)
-  - MCP Server (Official SDK - Python)
-  - Conversation & Message DB models
+  - Apache Kafka (message bus)
+  - Dapr (service mesh for pub/sub abstraction)
+  - Cloud providers (AWS, Azure, GCP - abstracted via Helm)
+  - Prometheus & Grafana (observability)
+  - Jaeger (distributed tracing)
+  - Event schema registry (Avro/JSON)
 
   Templates Requiring Updates:
-  - .specify/templates/plan-template.md ✅ (Phase-3/4 context added to Constitution Check)
-  - .specify/templates/spec-template.md ✅ (Phase-4 scope compatible)
-  - .specify/templates/tasks-template.md ✅ (Phase structure compatible)
+  - .specify/templates/plan-template.md ⚠ (Constitution Check updated)
+  - .specify/templates/spec-template.md ⚠ (New phase scope sections needed)
+  - .specify/templates/tasks-template.md ⚠ (Event-driven task types added)
+  - .specify/templates/checklist-template.md ⚠ (New checklists for events)
 
   Follow-up TODOs: None
 
   ============================================================================
 -->
 
-# Project Constitution: Authentication, Task Management, Frontend UI & AI Chatbot
+# Project Constitution: Authentication, Task Management, Chat, Advanced Features, Events & Cloud
 
 ## Overview
 
@@ -51,6 +60,9 @@ This constitution defines non-negotiable rules, constraints, and quality standar
 - **Spec-2**: Task management (CRUD + ownership) — **LOCKED READ-ONLY**
 - **Spec-3**: Frontend UI and responsive experience
 - **Spec-4**: AI Chatbot with OpenAI Agents SDK and MCP Server
+- **Spec-5**: Advanced Chat Features (006-advanced-features)
+- **Spec-6**: Event-Driven Architecture (007-local-event-architecture)
+- **Spec-7**: Cloud Deployment (008-cloud-deployment)
 
 All implementation MUST comply with this constitution.
 
@@ -137,7 +149,8 @@ Constitution → Specify → Plan → Tasks → Implement
 - Spec changes require re-approval before implementation
 - Constitution violations block PR approval
 - Phase-2 implementation is LOCKED (no new features, only bug fixes via ADR)
-- Phase-3 and Phase-4 features require explicit spec separation
+- Phases 3-7 features require explicit spec separation
+- Phase 5-7 features MUST NOT break existing functionality in Phases 1-4
 
 **Rationale**: Ensures security requirements are explicitly documented and reviewed.
 Phase separation prevents regression and maintains stability.
@@ -309,7 +322,7 @@ All Phase-2 (Task Management) code is LOCKED for new feature development:
 - Bug fixes (with detailed justification)
 - Dependencies updates (with compatibility verification)
 
-**Rationale**: Phase-2 is production-stable. Phase-3/4 extend via composition,
+**Rationale**: Phase-2 is production-stable. Phases 3-7 extend via composition,
 not modification. Prevents regression and data loss.
 
 ### XVII. Stateless Chat Architecture (Spec-4)
@@ -323,6 +336,7 @@ The AI Chat system MUST operate with stateless backend design:
 - Conversation history stored in database, not in-memory caches
 - OpenAI Agents SDK interactions MUST NOT accumulate server-side state
 - Load balancing across multiple backend instances MUST be possible
+- Event-driven chat MUST NOT accumulate state in-memory (use event log)
 
 **Stateless Pattern**:
 ```python
@@ -561,6 +575,360 @@ Be concise and helpful."""
 **Rationale**: Secures sensitive credentials, enables model switching for cost control,
 ensures visibility into OpenAI interactions for auditing.
 
+### XXVI. Event-Driven Architecture (Spec-6)
+
+The system MUST support asynchronous communication via events:
+
+**Rules**:
+- All state-changing operations (task creation, completion, deletion) MUST emit events
+- Events MUST be immutable records of what happened (not state snapshots)
+- Events MUST include: `type`, `user_id`, `resource_id`, `timestamp`, `data`
+- Events MUST be published to message broker (Kafka via Dapr)
+- Event consumers MUST be idempotent (safe to replay)
+- No operation MUST be blocked waiting for event consumption
+- Event processing failures MUST NOT corrupt primary data
+
+**Event Types (examples)**:
+```
+TaskCreated(user_id, task_id, title, description)
+TaskCompleted(user_id, task_id)
+TaskUpdated(user_id, task_id, title, description)
+TaskDeleted(user_id, task_id)
+ConversationStarted(user_id, conversation_id)
+MessageReceived(user_id, conversation_id, message_id)
+```
+
+**Rationale**: Events enable loose coupling, audit trails, and integration
+with external systems without direct dependencies.
+
+### XXVII. Kafka Event Bus Integration (Spec-6)
+
+Kafka MUST be the primary message bus for events:
+
+**Rules**:
+- Kafka topics MUST be organized by domain (e.g., `tasks`, `conversations`)
+- Topic names MUST follow pattern: `{domain}.{event_type}.{version}`
+  Example: `tasks.task_created.v1`, `conversations.message_received.v1`
+- Partitioning MUST be by `user_id` to ensure ordering per user
+- Retention policy MUST be at least 7 days (configurable)
+- Event schema MUST be registered in schema registry (Avro or JSON)
+- Consumer groups MUST be used for distributed consumption
+- Offset tracking MUST be maintained per consumer group
+
+**Forbidden Patterns**:
+- Direct Kafka clients in FastAPI endpoints (use Dapr)
+- Multiple topics for same event type (single source of truth)
+- Consumer lag MUST NOT exceed 1 hour during normal operation
+- Manual offset management (use Dapr or consumer group offset tracking)
+
+**Rationale**: Kafka ensures durability, ordering, and replay capability.
+Event-driven patterns enable scalability and decoupling.
+
+### XXVIII. Dapr Pub/Sub Abstraction (Spec-6)
+
+Dapr MUST be the abstraction layer for all pub/sub operations:
+
+**Rules**:
+- All event publishing MUST use Dapr Pub/Sub API (not direct Kafka client)
+- Dapr state management MUST be used for distributed state
+- Dapr secrets management MUST be used for sensitive values (API keys)
+- Dapr bindings MUST be used for external service integrations
+- Service-to-service calls MUST use Dapr service invocation (not REST)
+- All Dapr calls MUST include retries and timeout configuration
+
+**Dapr Configuration**:
+```yaml
+# Dapr pub/sub component (kafka)
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  - name: brokers
+    value: "kafka:9092"
+```
+
+**Backend Code Pattern**:
+```python
+# Publishing via Dapr (not direct Kafka)
+import dapr.client
+
+with dapr.client.DaprClient() as d:
+    d.publish_event(
+        pubsub_name="pubsub",
+        topic_name="tasks.task_created.v1",
+        data=json.dumps(event),
+    )
+```
+
+**Rationale**: Dapr abstracts message broker implementation. Enables
+switching from Kafka to RabbitMQ, Azure Service Bus, etc. without code changes.
+
+### XXIX. Event Sourcing Pattern (Spec-6)
+
+Event sourcing MUST be the pattern for audit trail and recovery:
+
+**Rules**:
+- Original state (task, conversation) MUST be stored in database
+- All mutations MUST generate immutable events
+- Events MUST be appended to event log (not updated or deleted)
+- Event log MUST be queryable for audit and debugging
+- Snapshots MAY be created for performance (read models)
+- Current state MUST be derivable by replaying events from start
+- Deletion MUST emit a `{Resource}Deleted` event (no physical deletion)
+
+**Event Log Storage**:
+```python
+class EventLog(SQLModel, table=True):
+    id: Optional[int] = Field(primary_key=True)
+    user_id: str = Field(index=True, nullable=False)
+    aggregate_id: str  # task_id or conversation_id
+    aggregate_type: str  # "Task" or "Conversation"
+    event_type: str  # "Created", "Updated", "Deleted"
+    data: str  # JSON event data
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    version: int  # Event sequence number per aggregate
+```
+
+**Rationale**: Event sourcing provides complete audit trail, enables
+temporal queries ("what was the state at 2pm?"), and aids debugging.
+
+### XXX. Message Schema & Versioning (Spec-6)
+
+All events MUST follow strict schema and versioning:
+
+**Rules**:
+- Events MUST be serialized as JSON with consistent structure
+- Event schema MUST be registered (Avro or JSON Schema)
+- Schema MUST include: `type`, `version`, `user_id`, `timestamp`
+- All fields MUST have type hints (not `any` or `object`)
+- Breaking changes MUST increment major version (v1 → v2)
+- New topics MUST be created for major versions (not reusing old topic)
+- Schema evolution MUST follow compatibility rules (backward/forward)
+- Consumer MUST handle events from multiple schema versions
+
+**Event Schema Example**:
+```json
+{
+  "type": "TaskCreated",
+  "version": "1.0",
+  "user_id": "user123",
+  "timestamp": "2026-03-15T10:30:00Z",
+  "task_id": 42,
+  "title": "Buy groceries",
+  "description": "Get milk and eggs"
+}
+```
+
+**Rationale**: Versioning enables schema evolution without breaking consumers.
+Strict typing prevents data corruption and enables validation.
+
+### XXXI. Local Kubernetes Event Mesh (Spec-6)
+
+Local development MUST use containerized Kafka within Kubernetes:
+
+**Rules**:
+- Kafka MUST run as a StatefulSet in local Kubernetes cluster
+- Zookeeper (or KRaft mode) MUST be configured for consensus
+- Kafka service MUST be accessible at `kafka.default.svc.cluster.local:9092`
+- Dapr sidecar MUST run in every pod that publishes/consumes events
+- Dapr configuration MUST reference Kafka broker address
+- PersistentVolumes MUST back Kafka StatefulSet for data durability
+- Helm charts MUST include Kafka setup (or reference subchart)
+
+**Helm Kafka Subchart Pattern**:
+```yaml
+dependencies:
+  - name: kafka
+    version: "28.0.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    alias: kafka
+```
+
+**Rationale**: Local event mesh enables development/testing of event-driven
+features without external dependencies.
+
+### XXXII. Cloud Deployment Portability (Spec-7)
+
+All deployments (local, cloud) MUST use identical Helm charts:
+
+**Rules**:
+- Single Helm chart MUST support local Kubernetes and all cloud providers
+- Environment-specific values MUST be in `values-{env}.yaml` files
+  Example: `values-local.yaml`, `values-aws.yaml`, `values-azure.yaml`
+- Cloud provider specifics MUST be abstracted via values (not conditional code)
+- No provider-specific containers or sidecars (use Dapr for abstraction)
+- Database connection strings MUST be injected via values (not hardcoded)
+- Secrets MUST be managed by cloud provider secret stores (AWS Secrets Manager, etc.)
+
+**Helm Values Pattern**:
+```yaml
+# values-local.yaml
+database:
+  url: "postgresql://localhost:5432/todo"
+kafka:
+  brokers: "kafka.default.svc.cluster.local:9092"
+dapr:
+  enabled: true
+  pubsub: "kafka"
+
+# values-aws.yaml
+database:
+  url: "postgresql://aws-rds-endpoint:5432/todo"
+kafka:
+  brokers: "aws-msk-endpoint:9092"
+dapr:
+  enabled: true
+  pubsub: "azure-service-bus"  # Dapr handles cloud provider swap
+```
+
+**Rationale**: Single chart reduces maintenance, ensures consistent
+deployment process across environments.
+
+### XXXIII. Helm Chart Reusability (Spec-7)
+
+Existing Helm charts MUST be extended for new services:
+
+**Rules**:
+- NO new Helm charts for new features (extend existing `todo-chatbot` chart)
+- Subcharts (dependencies) MUST be used for third-party services (Kafka, etc.)
+- Chart MUST parameterize all environment-specific values
+- Chart MUST support blue-green and canary deployments
+- ConfigMaps MUST be used for non-sensitive config (Dapr settings)
+- Secrets MUST be used for sensitive values (API keys)
+- Template names MUST follow pattern: `{service}-{resource-type}.yaml`
+  Example: `backend-deployment.yaml`, `kafka-statefulset.yaml`
+
+**Chart Directory Structure**:
+```
+todo-chatbot/
+├── Chart.yaml
+├── values.yaml
+├── values-local.yaml
+├── values-aws.yaml
+├── charts/  # Subcharts
+│   └── kafka/  # Bitnami Kafka subchart
+├── templates/
+│   ├── backend-deployment.yaml
+│   ├── frontend-deployment.yaml
+│   ├── kafka-statefulset.yaml  # Or use subchart
+│   ├── dapr-config.yaml
+│   └── ...
+```
+
+**Rationale**: Chart reusability reduces duplication, enables consistent
+configuration management across environments.
+
+### XXXIV. Cloud Provider Abstraction (Spec-7)
+
+Cloud provider specifics MUST be abstracted via configuration:
+
+**Rules**:
+- NO provider-specific code (use Dapr for pub/sub, secrets, state)
+- Container images MUST be provider-agnostic (no GCR, ECR URLs in Helm)
+- Image registries MUST be injected via values (imagePullSecrets)
+- Storage classes MUST be parameterized (not hardcoded `gp2` or `managed-premium`)
+- Ingress MUST use standard Kubernetes Ingress (not provider-specific resources)
+- DNS names MUST be injected via values (not hardcoded domain)
+- TLS certificates MUST be managed by cloud provider (cert-manager or native)
+
+**Cloud Provider Abstraction Pattern**:
+```yaml
+# Dapr component for pub/sub (provider-agnostic)
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.{{ .Values.dapr.pubsub }}  # "kafka", "azure-service-bus", etc.
+  version: v1
+  metadata:
+  - name: brokers
+    value: "{{ .Values.kafka.brokers }}"
+
+# Result: Same Helm chart works on AWS (Kafka) or Azure (Service Bus)
+```
+
+**Rationale**: Abstraction enables multi-cloud strategy, reduces vendor lock-in,
+simplifies cloud migration.
+
+### XXXV. Advanced Chat Features (Spec-5)
+
+Chat enhancements MUST NOT break existing chat functionality:
+
+**Rules**:
+- All new chat features MUST be backward compatible
+- Existing conversation schema MUST NOT change (add new tables if needed)
+- Chat API contract MUST remain unchanged (add new endpoints, don't modify old)
+- New features MUST be toggleable via feature flags or config
+- Rate limiting MUST adapt to new features (e.g., higher for premium users)
+- All new features MUST emit events for audit trail
+
+**Allowed Advanced Features (examples)**:
+- Conversation history search
+- Message filtering and sorting
+- Conversation tagging/labeling
+- User feedback on AI responses
+- Conversation export/download
+- Typing indicators
+- Read receipts
+
+**Forbidden Enhancements**:
+- Schema changes to existing Conversation or Message tables
+- Removal of existing endpoints
+- Breaking changes to message format
+- Direct integration with external services (must use MCP tools)
+
+**Rationale**: Backward compatibility ensures existing clients continue
+to work. Feature flags enable gradual rollout.
+
+### XXXVI. Conversation Intelligence (Spec-5)
+
+Advanced features MAY include conversation analysis and summarization:
+
+**Rules**:
+- Conversation summaries MUST be stored in database (not computed on demand)
+- Summaries MUST be updated via event (when conversation ends)
+- Summary generation MUST use OpenAI API (via agent SDK)
+- Summary MUST NOT expose other users' conversations
+- Summaries MUST be queryable for search/filtering
+- Summary updates MUST NOT delay message sending
+
+**Conversation Intelligence Examples**:
+- Auto-generated title (first 50 chars or summary)
+- Conversation topic classification
+- Sentiment analysis of user messages
+- Action items extracted from conversation
+
+**Rationale**: Summarization improves UX (better conversation discovery),
+enables analytics, and supports future intelligence features.
+
+### XXXVII. Chat Analytics & Observability (Spec-5)
+
+Advanced monitoring MUST be in place for chat operations:
+
+**Rules**:
+- All chat operations MUST emit structured logs (JSON format)
+- Logs MUST include: timestamp, user_id, conversation_id, event_type, duration
+- Metrics MUST be exported to Prometheus (message count, latency, errors)
+- Traces MUST be exported to Jaeger (for debugging slow operations)
+- Performance metrics MUST be tracked (OpenAI API latency, MCP tool latency)
+- User PII MUST NOT be logged (only user_id, never email or message content)
+- Log retention MUST comply with data privacy laws (configurable)
+
+**Observable Metrics**:
+- `chat_messages_total` - Total messages sent (by role: user/assistant)
+- `chat_message_latency_seconds` - OpenAI response time
+- `chat_errors_total` - Rate limit, API, and validation errors
+- `mcp_tool_calls_total` - MCP tool execution count
+- `mcp_tool_latency_seconds` - MCP tool execution time
+
+**Rationale**: Observability enables debugging, performance monitoring,
+and compliance with security requirements.
+
 ## Technology Constraints
 
 This constitution applies to the following technology stack:
@@ -576,18 +944,29 @@ This constitution applies to the following technology stack:
 | Database | Neon Serverless PostgreSQL | Persistent storage |
 | AI Engine | OpenAI Agents SDK | Chat agent execution |
 | MCP | MCP Server (Official SDK) | Tool exposure to agent |
+| Message Bus | Apache Kafka | Event publishing and consumption |
+| Dapr | Dapr (v1.10+) | Service mesh for pub/sub, secrets, state |
+| Event Schema | Avro or JSON Schema | Event serialization and validation |
+| Container Orchestration | Kubernetes 1.26+ | Local and cloud deployment |
+| IaC | Helm 3.10+ | Chart-based deployment |
+| Monitoring | Prometheus + Grafana | Metrics and dashboards |
+| Tracing | Jaeger | Distributed tracing |
 | Transport | HTTPS | Secure transmission |
 
 **Stack-Specific Rules**:
 - Better Auth MUST be configured with JWT session strategy
 - FastAPI MUST use dependency injection for auth (`Depends(get_current_user)`)
 - Tokens MUST be transmitted via Authorization header (not cookies for API)
-- SQLModel MUST be used for all database models (Task, User, Conversation, Message)
+- SQLModel MUST be used for all database models
 - Database credentials MUST be loaded from environment variables
 - Tailwind CSS MUST be used for all styling (no inline CSS)
 - OpenAI Agents SDK MUST be Python 3.11+ compatible
 - MCP Server MUST use official MCP SDK (not custom implementations)
 - Chat frontend MUST use OpenAI ChatKit for message rendering
+- Kafka topics MUST be versioned and schema-registered
+- Dapr sidecars MUST be injected in all pods
+- Prometheus scrape intervals MUST be 15s (configurable)
+- Helm charts MUST support both local K8s and cloud providers
 
 ## Development Workflow
 
@@ -613,7 +992,7 @@ This constitution governs:
 - Task API endpoint contracts
 
 **STATUS: LOCKED** — No new features. Bug fixes only via ADR.
-All Phase-3/4 features MUST use existing endpoints via MCP tools.
+All Phase-3/4/5+ features MUST use existing endpoints via MCP tools.
 
 ### Spec-3: Frontend UI Scope
 
@@ -646,6 +1025,71 @@ This constitution governs:
 - JWT validation for all chat endpoints
 - Stateless chat processing
 - Rate limiting for chat requests
+
+### Spec-5: Advanced Chat Features Scope (006-advanced-features)
+
+This constitution governs:
+- Conversation search and filtering
+- Conversation tagging and labeling
+- Conversation summaries and titles
+- Message feedback (thumbs up/down)
+- Conversation export/sharing (within user context)
+- Typing indicators and read receipts
+- Chat analytics dashboard (user's own stats)
+- Feature flags for gradual rollout
+
+**Rules**:
+- MUST NOT modify existing Conversation or Message schema
+- MUST NOT break existing chat endpoints
+- MUST emit events for all state changes
+- MUST use event-driven architecture
+- New tables OK (ConversationTag, UserFeedback, etc.)
+- Feature flags MUST control new functionality
+
+### Spec-6: Event-Driven Architecture Scope (007-local-event-architecture)
+
+This constitution governs:
+- Event emission from task and conversation services
+- Event schema definition and versioning
+- Kafka topic structure and partitioning
+- Event consumer implementation
+- Dapr Pub/Sub integration
+- Event sourcing for audit trails
+- Local Kubernetes Kafka deployment
+- Consumer group management
+
+**Rules**:
+- All state changes MUST emit events
+- Events MUST be immutable and append-only
+- NO event deletion or modification (only new events)
+- Consumers MUST be idempotent
+- Event processing failures MUST NOT corrupt data
+- Kafka topics MUST be parameterized in Helm charts
+
+### Spec-7: Cloud Deployment Scope (008-cloud-deployment)
+
+This constitution governs:
+- Helm chart extension for multi-cloud support
+- Environment-specific values files
+- Cloud provider abstraction (Dapr, native services)
+- Secret management (cloud provider vaults)
+- Database migration to managed services (RDS, Azure Database, Cloud SQL)
+- Container registry configuration
+- Load balancer and ingress configuration
+- Monitoring and logging in cloud environments
+
+**Supported Cloud Providers**:
+- AWS (EC2/EKS, RDS, Kafka MSK, Secrets Manager)
+- Azure (AKS, Database for PostgreSQL, Event Hubs, Key Vault)
+- Google Cloud (GKE, Cloud SQL, Pub/Sub, Secret Manager)
+- Hybrid (on-premise Kubernetes)
+
+**Rules**:
+- Same Helm chart MUST work for all providers
+- Provider-specific config MUST be in values files
+- Database URLs MUST be injected (not hardcoded)
+- Secrets MUST use cloud provider stores
+- Dapr MUST abstract pub/sub provider (Kafka ↔ Service Bus ↔ Pub/Sub)
 
 ### Explicitly Forbidden
 
@@ -680,6 +1124,31 @@ The following are OUT OF SCOPE for this constitution:
 - Direct API calls to OpenAI (only via agents SDK)
 - WebSocket connections (HTTP polling only)
 
+**Forbidden in Spec-5 (Advanced Chat)**:
+- Conversation deletion (only mark as archived)
+- Message editing (only new corrections)
+- Cross-user features (only within user context)
+- External integrations (Slack, Discord, etc.)
+- Voice/video chat
+- File attachments or images
+- Real-time sync across devices
+
+**Forbidden in Spec-6 (Events)**:
+- Event deletion or modification from event log
+- Direct Kafka client usage (must use Dapr)
+- Synchronous event processing (MUST NOT block requests)
+- Custom message brokers (Kafka via Dapr only)
+- Consumer rebalancing conflicts
+- Event consumer stalling (monitoring required)
+
+**Forbidden in Spec-7 (Cloud)**:
+- Hardcoded environment-specific values in code
+- Provider-specific container images (ECR, GCR, ACR in Helm)
+- Schema migrations at deployment time (pre-deploy jobs required)
+- Manual infrastructure setup (Helm chart MUST create all resources)
+- Cross-provider resource mixing (e.g., AWS RDS + Azure Cosmos)
+- Dual Kubernetes clusters (single cluster, multiple cloud possible via federation)
+
 **Deferred to Future Specs**:
 - Task sharing/collaboration
 - Multi-user task boards
@@ -689,6 +1158,9 @@ The following are OUT OF SCOPE for this constitution:
 - Voice commands
 - Image generation
 - Custom agent personalities
+- Advanced scheduling and automation
+- Workflow orchestration
+- AI-powered task recommendations
 
 ### Spec-1 Success Criteria
 
@@ -743,12 +1215,55 @@ AI Chatbot implementation is complete when:
 - [ ] Chat state is stateless on backend (no in-memory caches)
 - [ ] All conversation data queryable and durable in database
 
+### Spec-5 Success Criteria (006-Advanced-Features)
+
+Advanced chat features implementation is complete when:
+- [ ] All new features are backward compatible
+- [ ] Existing chat endpoints remain unchanged
+- [ ] New features emit events for audit trail
+- [ ] Feature flags control new functionality
+- [ ] No schema changes to Conversation/Message tables
+- [ ] Search/filtering works across user's conversations only
+- [ ] Summaries are generated and stored in database
+- [ ] Analytics metrics are exposed to Prometheus
+- [ ] User PII is not logged or exposed
+- [ ] All tests pass (existing + new)
+
+### Spec-6 Success Criteria (007-Event-Architecture)
+
+Event-driven architecture implementation is complete when:
+- [ ] All state changes emit events to Kafka
+- [ ] Events include all required fields (type, user_id, timestamp, data)
+- [ ] Event schema is versioned and registered
+- [ ] Kafka topics follow naming convention and versioning
+- [ ] Dapr Pub/Sub is used for all event operations (not direct Kafka)
+- [ ] Event consumers are idempotent and handle replays
+- [ ] Local Kubernetes includes Kafka StatefulSet with persistence
+- [ ] Event sourcing enables audit trail and replay
+- [ ] Consumer lag is monitored and within SLA
+- [ ] Helm chart includes Kafka subchart with values parameterization
+
+### Spec-7 Success Criteria (008-Cloud-Deployment)
+
+Cloud deployment implementation is complete when:
+- [ ] Single Helm chart works on local K8s and all cloud providers
+- [ ] Environment-specific values files control deployment differences
+- [ ] Database is migrated to cloud-managed service (RDS/Azure DB/Cloud SQL)
+- [ ] Secrets are stored in cloud provider vault (not .env file)
+- [ ] Container images are pulled from cloud registry (parameterized)
+- [ ] Ingress/load balancer is configured for cloud provider
+- [ ] Dapr pub/sub is configured for cloud provider (MSK, Service Bus, Pub/Sub)
+- [ ] Monitoring (Prometheus) and logging are sent to cloud provider
+- [ ] Auto-scaling is configured (HPA based on CPU/memory)
+- [ ] Rollback procedure is tested and documented
+- [ ] All infrastructure created via Helm (no manual setup)
+
 ## Governance
 
 ### Amendment Process
 
 1. Propose change with rationale
-2. Document security impact analysis
+2. Document security and backward compatibility impact
 3. Update version following semver:
    - MAJOR: Principle removal, redefinition, or phase lockdown
    - MINOR: New principle, expanded guidance, or phase extension
@@ -760,14 +1275,16 @@ AI Chatbot implementation is complete when:
 ### Compliance Review
 
 - All PRs MUST be verified against this constitution
-- Authentication, Task Management (Spec-2), Frontend UI, and Chat changes require explicit constitution check
+- Authentication, Task Management (Spec-2), Frontend UI, Chat, and Event Architecture changes require explicit constitution check
 - Phase-2 modifications require special justification and ADR
 - Violations MUST be resolved before merge
 - Security exceptions require documented justification and ADR
+- Cloud deployment changes require approval from infrastructure team
 
 ### Supersession
 
 This constitution supersedes all other authentication, task management, frontend UI,
-and chat guidance in the project. When conflicts arise, this document takes precedence.
+chat, event architecture, and deployment guidance in the project. When conflicts arise,
+this document takes precedence.
 
-**Version**: 2.0.0 | **Ratified**: 2026-01-11 | **Last Amended**: 2026-02-18
+**Version**: 3.0.0 | **Ratified**: 2026-01-11 | **Last Amended**: 2026-03-15

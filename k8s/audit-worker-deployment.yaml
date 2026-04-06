@@ -1,0 +1,105 @@
+# Kubernetes Deployment for Audit Consumer (Phase 2.7)
+# This service consumes all task-events and logs to audit trail
+# Independent deployment with Dapr sidecar for Kafka integration
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-consumer
+  namespace: default
+  labels:
+    app: audit-consumer
+    phase: "2.7"
+    component: event-consumer
+spec:
+  replicas: 1  # Single instance (audit is sequential)
+  selector:
+    matchLabels:
+      app: audit-consumer
+  strategy:
+    type: Recreate  # Sequential deployment for audit consistency
+  template:
+    metadata:
+      labels:
+        app: audit-consumer
+        phase: "2.7"
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "audit-consumer"
+        dapr.io/app-port: "8003"
+        dapr.io/log-level: "info"
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: audit-consumer
+        image: todo-backend:latest  # Build from backend Dockerfile
+        imagePullPolicy: IfNotPresent
+
+        # Run the audit consumer service
+        command: ["python"]
+        args: ["-m", "app.workers.audit_consumer"]
+
+        ports:
+        - name: app
+          containerPort: 8003
+          protocol: TCP
+
+        env:
+        # Database connection
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+
+        # Logging
+        - name: LOG_LEVEL
+          value: "INFO"
+
+        # Dapr configuration
+        - name: DAPR_PUBSUB_NAME
+          value: "kafka"
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-consumer
+  namespace: default
+  labels:
+    app: audit-consumer
+spec:
+  selector:
+    app: audit-consumer
+  type: ClusterIP
+  ports:
+  - name: app
+    port: 8003
+    targetPort: 8003
+    protocol: TCP

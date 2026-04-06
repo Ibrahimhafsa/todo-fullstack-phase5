@@ -15,17 +15,43 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Safe startup for HF Spaces."""
+    """Safe startup for HF Spaces.
+
+    Phase 5 Extensions (Spec-006):
+    - Initialize database
+    - Start APScheduler for reminder scheduling
+    """
     from app.models.task import Task
     from app.models.conversation import Conversation, Message
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from app.services.reminder_service import set_scheduler
 
+    # Initialize database
     try:
         init_db()
         print("Database initialized ✅")
     except Exception as e:
         print("Database init skipped ❌:", e)
 
+    # Initialize APScheduler for reminders (Phase 5)
+    try:
+        scheduler = AsyncIOScheduler()
+        scheduler.start()
+        set_scheduler(scheduler)
+        print("APScheduler started for reminders ✅")
+    except Exception as e:
+        print("APScheduler init failed ❌:", e)
+
     yield
+
+    # Shutdown scheduler on app shutdown
+    try:
+        scheduler = AsyncIOScheduler()
+        if scheduler.running:
+            scheduler.shutdown()
+            print("APScheduler shut down ✅")
+    except Exception as e:
+        print("APScheduler shutdown failed ❌:", e)
 
 
 app = FastAPI(

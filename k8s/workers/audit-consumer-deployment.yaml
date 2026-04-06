@@ -1,0 +1,119 @@
+---
+# Audit Consumer Worker Deployment
+# Consumes all task events and logs to audit trail
+# Note: Single replica for sequential consistency (append-only audit log)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-consumer
+  namespace: default
+  labels:
+    app: audit-consumer
+    component: event-consumer
+    worker-type: audit
+spec:
+  replicas: 1  # Single replica for sequential consistency
+  strategy:
+    type: Recreate  # No parallel updates (audit consistency)
+  selector:
+    matchLabels:
+      app: audit-consumer
+  template:
+    metadata:
+      labels:
+        app: audit-consumer
+        component: event-consumer
+        worker-type: audit
+      annotations:
+        # Dapr sidecar injection
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "audit-consumer"
+        dapr.io/app-port: "8003"
+        dapr.io/app-protocol: "http"
+        dapr.io/log-level: "info"
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: audit-consumer
+        image: todo-backend:1.0
+        imagePullPolicy: Never
+        command: ["python", "-m", "app.workers.audit_consumer"]
+        ports:
+        - name: http
+          containerPort: 8003
+          protocol: TCP
+        env:
+        # Logging
+        - name: LOG_LEVEL
+          value: "INFO"
+
+        # Database configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: connection-string
+
+        # Authentication
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: better-auth-secret
+
+        # OpenAI
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secrets
+              key: openai-api-key
+
+
+        # Dapr configuration
+        - name: DAPR_PUBSUB_NAME
+          value: "kafka-pubsub"
+
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+
+        # Consumer group for Kafka (separate from other consumers)
+        - name: CONSUMER_GROUP
+          value: "audit-consumer-group"
+
+        # Audit configuration
+        # Phase 2.7: Logs to console
+        # Phase 7+: Will log to PostgreSQL audit_log table
+        - name: AUDIT_STORAGE
+          value: "console"  # or "database" for Phase 7+
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+
+      # No pod anti-affinity: audit consumer must run sequentially on same node
+      # affinity: {}
+
+---
+# Audit Consumer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-consumer
+  namespace: default
+  labels:
+    app: audit-consumer
+    component: event-consumer
+spec:
+  selector:
+    app: audit-consumer
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8003
+    targetPort: http
+    protocol: TCP

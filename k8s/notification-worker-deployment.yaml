@@ -1,0 +1,113 @@
+# Kubernetes Deployment for Notification Consumer (Phase 2.7)
+# This service consumes ReminderTriggered events and sends notifications
+# Independent deployment with Dapr sidecar for Kafka integration
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-consumer
+  namespace: default
+  labels:
+    app: notification-consumer
+    phase: "2.7"
+    component: event-consumer
+spec:
+  replicas: 2  # HA setup with 2 instances
+  selector:
+    matchLabels:
+      app: notification-consumer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: notification-consumer
+        phase: "2.7"
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "notification-consumer"
+        dapr.io/app-port: "8002"
+        dapr.io/log-level: "info"
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: notification-consumer
+        image: todo-backend:latest  # Build from backend Dockerfile
+        imagePullPolicy: IfNotPresent
+
+        # Run the notification consumer service
+        command: ["python"]
+        args: ["-m", "app.workers.notification_consumer"]
+
+        ports:
+        - name: app
+          containerPort: 8002
+          protocol: TCP
+
+        env:
+        # Logging
+        - name: LOG_LEVEL
+          value: "INFO"
+
+        # Dapr configuration
+        - name: DAPR_PUBSUB_NAME
+          value: "kafka"
+
+        # Notification service configuration (Phase 7+)
+        - name: NOTIFICATION_CHANNELS
+          value: "in_app"  # Can be: in_app, email, push, sms
+
+        # Email configuration (Phase 7+)
+        - name: EMAIL_SERVICE
+          value: "console"  # Can be: sendgrid, mailgun, aws_ses, console
+
+        # Push notification configuration (Phase 7+)
+        - name: PUSH_SERVICE
+          value: "console"  # Can be: fcm, apns, console
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-consumer
+  namespace: default
+  labels:
+    app: notification-consumer
+spec:
+  selector:
+    app: notification-consumer
+  type: ClusterIP
+  ports:
+  - name: app
+    port: 8002
+    targetPort: 8002
+    protocol: TCP

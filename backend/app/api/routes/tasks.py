@@ -1,4 +1,5 @@
 """Task API endpoints with ownership enforcement."""
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session
 
@@ -51,21 +52,75 @@ def create_task(
     return TaskResponse.model_validate(task)
 
 
-# T016: GET /api/{user_id}/tasks - List tasks
+# T016: GET /api/{user_id}/tasks - List tasks with search/filter/sort
 @router.get("/{user_id}/tasks", response_model=TaskListResponse)
 def list_tasks(
     user_id: str,
     current_user_id: int = Depends(get_current_user),
-    session: Session = Depends(get_db)
+    session: Session = Depends(get_db),
+    # Phase 5 Extensions (Spec-006)
+    q: Optional[str] = None,  # Search query
+    priority: Optional[str] = None,  # Filter by priority
+    tags: Optional[str] = None,  # Filter by tags (comma-separated)
+    due_date_from: Optional[str] = None,  # Filter due_date >= (ISO-8601)
+    due_date_to: Optional[str] = None,  # Filter due_date <= (ISO-8601)
+    sort_by: Optional[str] = None,  # Sort by: created_at, due_date, priority
+    sort_order: Optional[str] = "asc"  # Sort order: asc or desc
 ) -> TaskListResponse:
     """
-    List all tasks for the authenticated user.
+    List all tasks for the authenticated user with search/filter/sort.
 
     US2: View Task List
     FR-012, FR-014
+
+    Phase 5 Extensions (Spec-006):
+    - Search: ?q=quarterly (searches title and description)
+    - Filter Priority: ?priority=High
+    - Filter Tags: ?tags=work,urgent (comma-separated, OR logic)
+    - Filter Due Date: ?due_date_from=2026-03-15T00:00:00Z&due_date_to=2026-03-31T23:59:59Z
+    - Sort: ?sort_by=due_date&sort_order=asc (created_at, due_date, priority)
+
+    Example: GET /api/user123/tasks?q=report&priority=High&sort_by=due_date
     """
+    from datetime import datetime as dt
+
     _verify_ownership(user_id, current_user_id)
-    tasks = task_service.list_tasks(session, str(current_user_id))
+
+    # Parse optional filters
+    tags_list = None
+    if tags:
+        tags_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+    due_date_start = None
+    if due_date_from:
+        try:
+            due_date_start = dt.fromisoformat(due_date_from.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+
+    due_date_end = None
+    if due_date_to:
+        try:
+            due_date_end = dt.fromisoformat(due_date_to.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+
+    # Validate sort_order
+    if sort_order not in ("asc", "desc"):
+        sort_order = "asc"
+
+    # Call enhanced service with filters
+    tasks = task_service.list_tasks(
+        session,
+        str(current_user_id),
+        search_query=q,
+        priority_filter=priority,
+        tags_filter=tags_list,
+        due_date_start=due_date_start,
+        due_date_end=due_date_end,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
     return TaskListResponse(
         tasks=[TaskResponse.model_validate(t) for t in tasks],
         count=len(tasks)

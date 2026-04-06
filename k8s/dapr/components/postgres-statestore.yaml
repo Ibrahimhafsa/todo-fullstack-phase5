@@ -1,0 +1,69 @@
+---
+# Dapr State Store Component: PostgreSQL
+# This component configures Dapr to use PostgreSQL for application state storage
+# Includes support for Neon Serverless PostgreSQL
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: postgres-statestore
+  namespace: default
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+    # PostgreSQL connection string
+    # Format: postgresql://user:password@host:port/database
+    # Placeholder: Replace with your actual Neon PostgreSQL connection string
+    # You can get this from: https://console.neon.tech/
+    - name: connectionString
+      secretKeyRef:
+        name: postgres-credentials
+        key: connection-string
+
+    # Table name for state storage
+    - name: table
+      value: "dapr_state"
+
+    # Connection pool settings
+    - name: maxConns
+      value: "25"
+
+    - name: maxConnIdleTime
+      value: "5m"
+
+    - name: connMaxLifetime
+      value: "30m"
+
+    # Query timeout
+    - name: queryExecTimeout
+      value: "20s"
+
+    # SSL Mode for PostgreSQL connections
+    # Options: disable, require, verify-ca, verify-full
+    # For Neon: use "require"
+    - name: sslMode
+      value: "require"
+
+    # TTL cleanup settings (optional)
+    # Automatically delete expired state entries
+    - name: cleanupInterval
+      value: "1h"
+
+    - name: deleteExpiredStateInterval
+      value: "15m"
+
+---
+# Kubernetes Secret for PostgreSQL credentials
+# This secret stores the database connection string securely
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: default
+type: Opaque
+stringData:
+  # PLACEHOLDER: Replace with your actual PostgreSQL connection string
+  # Format: postgresql://username:password@hostname:5432/database
+  # Example for Neon: postgresql://user@host.neon.tech:5432/neondb
+  # WARNING: In production, use a secret management solution (e.g., Vault)
+  connection-string: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DATABASE}?sslmode=require"

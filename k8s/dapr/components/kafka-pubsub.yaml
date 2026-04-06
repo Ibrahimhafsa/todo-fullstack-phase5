@@ -1,0 +1,69 @@
+---
+# Dapr Pub/Sub Component: Kafka
+# This component configures Dapr to use Kafka as the message broker
+# for event publishing and subscription (Constitution XXVIII)
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Kafka broker addresses
+    # For local Minikube: use service DNS name in kafka namespace
+    - name: brokers
+      value: "kafka-cluster-kafka-bootstrap.kafka:9092"
+
+    # Authentication type (required in Dapr 1.17.3+)
+    - name: authType
+      value: "none"
+
+    # Kafka version
+    - name: version
+      value: "3.4.0"
+
+    # Consumer configuration
+    - name: consumerGroup
+      value: "dapr-consumer"
+
+    - name: consumeRetryInterval
+      value: "100ms"
+
+    - name: consumeRetryBackoffMax
+      value: "10s"
+
+    # Producer configuration
+    - name: clientID
+      value: "dapr-producer"
+
+    # SASL/SCRAM authentication (if Kafka requires authentication)
+    # Uncomment and configure if your Kafka cluster uses authentication
+    # - name: saslType
+    #   value: "plaintext"  # or "scram" for SCRAM-SHA-256
+    # - name: saslUser
+    #   value: "${KAFKA_SASL_USER}"
+    # - name: saslPassword
+    #   secretKeyRef:
+    #     name: kafka-credentials
+    #     key: password
+
+    # TLS configuration (if Kafka requires TLS)
+    # Uncomment and configure if your Kafka cluster uses TLS
+    # - name: tls
+    #   value: "true"
+    # - name: tlsCertFile
+    #   value: "/etc/dapr/secrets/kafka/tls.crt"
+    # - name: tlsKeyFile
+    #   value: "/etc/dapr/secrets/kafka/tls.key"
+    # - name: tlsCaFile
+    #   value: "/etc/dapr/secrets/kafka/ca.crt"
+    # - name: tlsHostname
+    #   value: "kafka-cluster.kafka"
+
+# Note on topics:
+# Dapr will NOT automatically create topics. Pre-create them using KafkaTopic CRDs:
+#   - task-events (for task mutations)
+#   - reminders (for reminder triggered events)
+#   - task-updates (for real-time updates)

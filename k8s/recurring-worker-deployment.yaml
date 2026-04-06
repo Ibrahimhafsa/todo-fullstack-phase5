@@ -1,0 +1,122 @@
+# Kubernetes Deployment for Recurring Task Consumer (Phase 2.7)
+# This service consumes TaskCompleted events and generates next task instances
+# Independent deployment with Dapr sidecar for Kafka integration
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recurring-task-consumer
+  namespace: default
+  labels:
+    app: recurring-task-consumer
+    phase: "2.7"
+    component: event-consumer
+spec:
+  replicas: 2  # HA setup with 2 instances
+  selector:
+    matchLabels:
+      app: recurring-task-consumer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: recurring-task-consumer
+        phase: "2.7"
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "recurring-consumer"
+        dapr.io/app-port: "8001"
+        dapr.io/log-level: "info"
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: recurring-consumer
+        image: todo-backend:latest  # Build from backend Dockerfile
+        imagePullPolicy: IfNotPresent
+
+        # Run the recurring consumer service
+        command: ["python"]
+        args: ["-m", "app.workers.recurring_consumer"]
+
+        ports:
+        - name: app
+          containerPort: 8001
+          protocol: TCP
+
+        env:
+        # Database connection
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+
+        # Authentication (required by Pydantic Settings)
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: better-auth-secret
+
+        # OpenAI (required by Pydantic Settings)
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secrets
+              key: openai-api-key
+
+        # Logging
+        - name: LOG_LEVEL
+          value: "INFO"
+
+        # Dapr configuration
+        - name: DAPR_PUBSUB_NAME
+          value: "kafka"
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recurring-task-consumer
+  namespace: default
+  labels:
+    app: recurring-task-consumer
+spec:
+  selector:
+    app: recurring-task-consumer
+  type: ClusterIP
+  ports:
+  - name: app
+    port: 8001
+    targetPort: 8001
+    protocol: TCP

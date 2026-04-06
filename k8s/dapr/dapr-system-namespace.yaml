@@ -1,0 +1,10 @@
+---
+# Dapr System Namespace
+# This namespace contains Dapr control plane services and sidecar injector webhook
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dapr-system
+  labels:
+    name: dapr-system
+    app: dapr

@@ -1,0 +1,152 @@
+---
+# Frontend Next.js Deployment with Dapr Sidecar
+# This deployment runs the todo-fullstack frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: default
+  labels:
+    app: frontend
+    component: web-ui
+    version: v1
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        component: web-ui
+      annotations:
+        # Dapr sidecar annotations (optional for frontend, but enabled for consistency)
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "frontend"
+        dapr.io/app-port: "3000"
+        dapr.io/app-protocol: "http"
+        dapr.io/log-level: "info"
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: frontend
+        image: todo-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        # Next.js configuration
+        - name: NODE_ENV
+          value: "production"
+
+        # Backend API endpoint
+        # PLACEHOLDER: Replace with your backend service URL
+        - name: NEXT_PUBLIC_API_URL
+          value: "http://backend:8000"
+
+        # Authentication (Better Auth)
+        # PLACEHOLDER: Replace with your actual Better Auth secret
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: better-auth-secret
+
+        # NEXT_PUBLIC_* variables are exposed to the browser
+        - name: NEXT_PUBLIC_LOG_LEVEL
+          value: "info"
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - frontend
+              topologyKey: kubernetes.io/hostname
+
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: default
+  labels:
+    app: frontend
+    component: web-ui
+spec:
+  selector:
+    app: frontend
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 3000
+    targetPort: http
+    protocol: TCP
+
+---
+# Ingress for frontend (optional, enables external access)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: default
+  labels:
+    app: frontend
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 3000
+  # For HTTPS support, add TLS configuration:
+  # tls:
+  # - hosts:
+  #   - localhost
+  #   secretName: frontend-tls

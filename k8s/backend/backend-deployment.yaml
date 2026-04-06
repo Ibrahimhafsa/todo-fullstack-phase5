@@ -1,0 +1,173 @@
+---
+# Backend FastAPI Deployment with Dapr Sidecar
+# This deployment runs the todo-fullstack backend with Dapr sidecar for event publishing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: default
+  labels:
+    app: backend
+    component: api-server
+    version: v1
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        component: api-server
+      annotations:
+        # Dapr sidecar injection annotations (Constitutional XXVIII)
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "backend"
+        dapr.io/app-port: "8000"
+        dapr.io/app-protocol: "http"
+        dapr.io/http-read-buffer-size: "4096"
+        dapr.io/log-level: "info"
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: backend
+        image: todo-backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        # FastAPI configuration
+        - name: LOG_LEVEL
+          value: "INFO"
+
+        - name: HOST
+          value: "0.0.0.0"
+
+        - name: PORT
+          value: "8000"
+
+        # Database configuration
+        # PLACEHOLDER: Replace with your actual Neon PostgreSQL connection string
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: connection-string
+
+        # Authentication (Better Auth)
+        # PLACEHOLDER: Replace with your actual Better Auth secret
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: better-auth-secret
+
+        # OpenAI API Configuration (required by Pydantic Settings)
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secrets
+              key: openai-api-key
+
+        # Dapr configuration (for event publishing)
+        # The Dapr sidecar will be injected and listen on port 3500
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+
+        # Optional: Enable gRPC if needed
+        - name: DAPR_GRPC_PORT
+          value: "50001"
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+        # Volume mounts (if needed for config files)
+        # volumeMounts:
+        # - name: config
+        #   mountPath: /etc/config
+
+      # Volumes (if needed)
+      # volumes:
+      # - name: config
+      #   configMap:
+      #     name: backend-config
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - backend
+              topologyKey: kubernetes.io/hostname
+
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: default
+  labels:
+    app: backend
+    component: api-server
+spec:
+  selector:
+    app: backend
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+
+---
+# ConfigMap for backend configuration (optional)
+# Uncomment and customize as needed
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: backend-config
+#   namespace: default
+# data:
+#   config.yaml: |
+#     logging:
+#       level: INFO
+#     api:
+#       workers: 4
+#       timeout: 30
